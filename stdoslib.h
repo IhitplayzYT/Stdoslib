@@ -70,6 +70,9 @@ typedef __builtin_va_list va_list;
 #define va_end(ap) __builtin_va_end(ap)
 #define trash(arg, ...) ((void)0)
 #define use(a) ((void)(a))
+#define STD_COMPARATOR(a,b) ((a) > (b))
+#define STR_COMPARATOR(a,b) (strcomp((a),(b)))
+
 
 typedef enum Type { t_char, t_int, t_float, t_charptr, t_bool } Type;
 
@@ -536,6 +539,43 @@ if (arr) {free((v_Metadata*)(arr)-1);\
 (arr) = NULL;}     \
 } while (0)
 
+#define SORT_ARGS(_1,_2,name,...) name
+
+
+#define v_sort(...) SORT_ARGS(__VA_ARGS__,sort_def,sort_by) (__VA_ARGS__)
+
+#define v_slice
+
+// TODO: ADD DENERIC FOR STRINGS
+#define sort_def(arr) do {\
+\
+\
+} while(0)
+
+// Avoid namespace collision
+#define __MERGE__SORT(arr,l,r,cmp) do{\
+if ((l) < (r){\
+u64 __mid = (l) + ((r)-(l))/2;\
+__MERGE__SORT((arr),(l),__mid,cmp);\
+__MERGE__SORT((arr),__mid,(r),cmp);\
+__MERGE(arr,(l),__mid,(r),cmp);\
+}\
+} while (0)
+
+
+#define merge(arr,l,m,r,cmp) do{\
+u64 __l1 = (m) - (l) + 1,__l2 = (r) - (m);\
+__auto_type __temp = malloc(sizeof(*(arr)) * (__l1+__l2));\
+if (!__temp) exit(10);\
+u64 __i=(l),__j=(m),__k=0;\
+while (__i <= (m) && __j <= (r)){\
+__temp[__k++] = (cmp)((arr)[__i],(arr)[__j])?arr[__j]:arr[__i];\
+}\
+while (__i <= (m)) __temp[__k++] = (arr)[__i++];\
+while (__j <= (r)) __temp[__k++] = (arr)[__j++];\
+memcopy(&(arr[l]),__temp,sizeof(*(arr)) * __k);\
+free(__temp);\
+} while(0)
 
 typedef struct ss_Metadata{
 u64 len,cap;
