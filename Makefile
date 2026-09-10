@@ -15,7 +15,7 @@ OBJ := $(SRC:.c=.o)
 all: $(STATIC) $(SHARED)
 
 %.o: %.c 
-	$(CC) $(CFLAGS) -c $< -c $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(STATIC): $(OBJ)
 	$(AR) $(ARFLAGS) $@ $^

@@ -1,8 +1,6 @@
 /* stdoslib.c */
 #include "stdoslib.h"
 
-extern void * DEALLOCATOR[];
-extern i32 ALLOCED_OBJ;
 
 public i16 _copyn(i8 *a,i8 *b,i16 n,i8 z){
 if (!a || !b) return 0;
@@ -361,7 +359,7 @@ return ticks_elapsed() / tick_freq();
 public Time * curr_time(){
 i64 t = seconds_elapsed();
 Time * ts = (Time *)alloc(sizeof(Time));
-if (!t) return (Time *)0;
+if (!ts) return (Time *)0;
 ts->minutes = (i16)(t / 60);
 ts->hours = (i16)(t / 3600);
 ts->seconds = t % 60;
@@ -530,10 +528,7 @@ public struct s_Tok_ret* tokenise(i8* str, i8 ch) {
 }
 
 public void FINALISE(){
-    for (i32 i = ALLOCED_OBJ-1;i > -1;i--){
-        if (DEALLOCATOR[i]) dealloc(DEALLOCATOR[i]);
-        else ++i;
-    }
+    // No-op: DEALLOCATOR and ALLOCED_OBJ not implemented
 }
 
 public i8 hex2ascii(i8* s){
@@ -612,7 +607,7 @@ if (!s) return (i8*)0;
 i8 * ret = (i8*)alloc(len(s));
 if (!ret) return (i8*)0;
 for (i16 i = 0; s[i] != '\0';i++){
-if (s[i] >= 'a' && s[i] <= 'z') ret[i] += 32;
+if (s[i] >= 'a' && s[i] <= 'z') ret[i] = s[i] - 32;
 else ret[i] = s[i];
 }
 return ret;
@@ -624,7 +619,7 @@ if (!s) return (i8*)0;
 i8 * ret = (i8*)alloc(len(s));
 if (!ret) return (i8*)0;
 for (i16 i = 0; s[i] != '\0';i++){
-if (s[i] >= 'A' && s[i] <= 'Z') ret[i] -= 32;
+if (s[i] >= 'A' && s[i] <= 'Z') ret[i] = s[i] + 32;
 else ret[i] = s[i];
 }
 return ret;
@@ -666,7 +661,7 @@ return ret;
 
 
 public i8* find_chr(char *s,char c){
-for (i8* p = (i8 *)s; p ;p++){
+for (i8* p = (i8 *)s; *p ;p++){
     if (*p == c){return p;}
 }
 return 0;

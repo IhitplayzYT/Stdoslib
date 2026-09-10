@@ -500,7 +500,7 @@ typedef struct s_Vector {
 //   [header][array]
 #define mkvec(arr, cap)                                                        \
   do {                                                                         \
-    v_Metadata *meta = malloc(sizeof(Metadata) + sizeof(*(arr)) * (cap));      \
+    v_Metadata *meta = malloc(sizeof(v_Metadata) + sizeof(*(arr)) * (cap));      \
     if (!meta)                                                                 \
       exit(10);                                                                \
     meta->cap = (cap);                                                         \
@@ -512,11 +512,11 @@ typedef struct s_Vector {
   do {                                                                         \
     if (!arr)                                                                  \
       exit(10);                                                                \
-    if (((v_Metadata *)(arr) - 1)->len == ((Metadata *)(arr) - 1)->cap) {      \
-      v_Metadata *meta = (Metadata *)(arr) - 1;                                \
+    if (((v_Metadata *)(arr) - 1)->len == ((v_Metadata *)(arr) - 1)->cap) {      \
+      v_Metadata *meta = (v_Metadata *)(arr) - 1;                                \
       u64 cap = meta->cap;                                                     \
-      v_Metadata *n_meta =                                                     \
-          realloc(meta, sizeof(Metadata) + sizeof(*(arr)) * cap * 2);          \
+      v_Metadata *n_meta =                                                      \
+          realloc(meta, sizeof(v_Metadata) + sizeof(*(arr)) * cap * 2);          \
       meta = n_meta;                                                           \
       if (!meta)                                                               \
         exit(10);                                                              \
@@ -556,7 +556,7 @@ typedef struct s_Vector {
 
 #define v_slice(arr, l, r)                                                     \
   do {                                                                         \
-    v_Metadata *meta = (Metadata *)arr - 1;                                    \
+    v_Metadata *meta = (v_Metadata *)arr - 1;                                    \
     if ((l > 0 && l < meta->len)) {                                            \
       if ((r > l) && (r > 0 && r < meta->len)) {                               \
         u64 n_len = r - 1;                                                     \
@@ -625,8 +625,9 @@ typedef struct s_String {
     if (!arr)                                                                  \
       exit(10);                                                                \
     s_Metadata *meta = (s_Metadata *)(arr) - 1;                                \
-    if (meta->len + len(str) > meat->len) {                                    \
-      u64 new_len, old_len = len(str) + meta->len, meta->len;                  \
+    u64 old_len = meta->len;                                                   \
+    if (old_len + len(str) > meta->cap) {                                      \
+      u64 new_len = old_len + len(str);                                        \
       meta =                                                                   \
           realloc(meta, sizeof(s_Metadata) + sizeof(*(arr)) * (new_len + 10)); \
       if (!meta)                                                               \
@@ -1050,6 +1051,6 @@ public
 void *clone(void *struct_, int sz); // Clones the object
 
 public
-bool DEALLOC();
+boolean DEALLOC();
 
 /* Function Signatures */
