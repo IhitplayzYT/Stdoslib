@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
+#include <math.h>
 #ifndef MAX_OBJECTS
 #define MAX_OBJECTS 2000
 #endif
@@ -64,6 +66,11 @@ typedef unsigned char boolean;
 #define private static
 #define packed __attribute__((packed))
 #define FREE(a, ...) freeall(a, __VA_ARGS__, NULL)
+#define max(a,b) (a) >= (b) ? (a) : (b)
+#define min(a,b) (a) <= (b) ? (a) : (b)
+#define inc_range(a,lo,hi) (a) >= (lo) && (a) <= (hi)
+#define n_inc_range(a,lo,hi) (a) > (lo) && (a) < (hi)
+#define clamp(a,lo,hi) max((hi),min((lo),(a)))
 typedef __builtin_va_list va_list;
 #define va_start(ap, last) __builtin_va_start(ap, last)
 #define va_arg(ap, type) __builtin_va_arg(ap, type)
@@ -72,6 +79,7 @@ typedef __builtin_va_list va_list;
 #define use(a) ((void)(a))
 #define STD_COMPARATOR(a, b) ((a) > (b))
 #define STR_COMPARATOR(a, b) (strcomp((a), (b)))
+
 
 typedef enum Type { t_char, t_int, t_float, t_charptr, t_bool } Type;
 
@@ -864,6 +872,140 @@ DEF_LEN(s8 *, len_s8);
 
 #define print(fmt, ...) vprintf(fmt, __VA_ARGS__)
 #endif
+
+
+public inline uint64_t l_rotate(uint64_t x, int k) {return (x << k) | (x >> (64 - k));}
+public inline uint64_t r_rotate(uint64_t x, int k) {return (x >> k) | (x << (64 - k));}
+
+
+#ifndef PRNG_H
+#define PRNG_H
+
+// splitmix64 (used to spread seed into the xoshiro state
+private inline uint64_t splitmix_seed(uint64_t *state) {
+    uint64_t z = (*state += 0x9E3779B97F4A7C15ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+// RNG generator state
+public typedef struct {
+    uint64_t s[4];
+    double spare;
+    boolean has_spare;
+} t_RNG;
+
+// Seed rng
+public inline void seed_rng(t_RNG *r, uint64_t seed) {
+    for (int i = 0; i < 4; i++) r->s[i] = splitmix_seed(&seed);
+    r->has_spare = 0;
+    r->spare = 0.0;
+}
+
+// xoshiro256**
+private inline uint64_t rng_next(t_RNG *r) {
+    uint64_t *s = r->s;
+    const uint64_t ret = l_rotate(s[1] * 5, 7) * 9;
+    const uint64_t t = s[1] << 17;
+    s[2] ^= s[0];
+    s[3] ^= s[1];
+    s[1] ^= s[2];
+    s[0] ^= s[3];
+    s[2] ^= t;
+    s[3] = l_rotate(s[3], 45);
+    return ret;
+}
+
+public inline uint32_t sample_u32(t_RNG *r) {return (uint32_t)(rng_next(r) >> 32);}
+
+// Double[0,1), remove the power bits in double by dividinng by 2 ^ 53
+public inline f64 sample_f64(t_RNG *r) {return (double)(rng_next(r) >> 11) * (1.0 / 9007199254740992.0);}
+
+// Bounded generate u64 [0, bound) using Lemire to rmeove the modulo bias
+// Used AI to generate this
+public inline uint64_t sample_max(t_RNG *r, uint64_t bound) {
+    if (bound == 0) return 0;
+    __uint128_t m = (__uint128_t)rng_next(r) * (__uint128_t)bound;
+    uint64_t l = (uint64_t)m;
+    if (l < bound) {
+        uint64_t t = (uint64_t)(-bound) % bound;
+        while (l < t) {
+            m = (__uint128_t)rng_next(r) * (__uint128_t)bound;
+            l = (uint64_t)m;
+        }
+    }
+    return (uint64_t)(m >> 64);
+}
+
+public inline int64_t sample_range(t_RNG *r, int64_t lo, int64_t hi) {return lo + (int64_t)sample_max(r, (uint64_t)(hi - lo) + 1);}
+public inline u8 sample_byte(t_RNG * rng){return (u8)rng_next(rng);}
+public inline u8 * sample_str(t_RNG * rng,uint64_t l){
+  u8 * ret = (u8 *)calloc(l, sizeof(u8));
+  if (!ret){
+    fprintf(stderr, "Malloc Failed");
+    exit(-1);
+  }
+  for (;l;l--)  ret[l] = sample_byte(rng);
+  return ret;
+}
+
+public inline u8 * sample_str_from_dict(t_RNG * rng,uint64_t l,char * dict){
+  u8 * ret = (u8 *)calloc(l, sizeof(u8));
+  if (!ret){
+    fprintf(stderr, "Malloc Failed");
+    exit(-1);
+  }
+  uint64_t dl = len(dict);
+  for (;l;l--)  ret[l] = (u8)sample_max(rng,dl);
+  return ret;
+}
+
+public typedef enum {
+  Uniform,
+  Normal,
+  Exponential,
+  Bernaulli  
+} t_Distribution;
+
+public inline double sample_uniform(t_RNG *r, double lo, double hi) {return lo + sample_f64(r) * (hi - lo);}
+
+/* Box-Muller, polar-free form, with spare-value caching. */
+// Used AI
+public inline double frng_normal(t_RNG *r, double mean, double stddev) {
+    if (r->has_spare) {
+        r->has_spare = false;
+        return mean + stddev * r->spare;
+    }
+    double u1, u2;
+    do { u1 = sample_f64(r); } while (u1 <= 1e-300); // avoid log(0)
+    u2 = sample_f64(r);
+    double mag = sqrt(-2.0 * log(u1));
+    double z0 = mag * cos(6.283185307179586476925 * u2);
+    double z1 = mag * sin(6.283185307179586476925 * u2);
+    r->spare = z1;
+    r->has_spare = true;
+    return mean + stddev * z0;
+}
+
+public inline double sample_exponential(t_RNG *r, double lambda) {
+    double u;
+    do { u = sample_f64(r); } while (u <= 1e-300); // avoid log(0)
+    return -log(u) / lambda;
+}
+
+static inline int sample_bernaulli(t_RNG *r, double p) { return sample_f64(r) < p;}
+
+static inline double sample_discrete(t_RNG * r, double ** table,uint64_t m,uint64_t n){
+
+
+  return table[clamp(rng_next(r), 0,m)][clamp(rng_next(r), 0,m)];
+}
+
+#endif
+
+
+
 /* MACROS */
 #define init_filter(TYPE, fxn)                                                 \
   TYPE *pre_concat(TYPE##_##fxn, _filter)(TYPE * arr, i32 n, i32 * ret_len) {  \

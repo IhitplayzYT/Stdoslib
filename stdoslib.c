@@ -712,7 +712,6 @@ else return false;
 return true;
 }
 
-
 public Type assert_type(char * str) {
 if (len(str) == 1 || str[0] == '\'') return t_char;
 if (is_numeric(str)){
